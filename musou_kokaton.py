@@ -126,6 +126,7 @@ class Bomb(pg.sprite.Sprite):
         self.rect.centerx = emy.rect.centerx
         self.rect.centery = emy.rect.centery+emy.rect.height//2
         self.speed = 6
+        self.emp_hit = False
 
     def update(self):
         """
@@ -240,6 +241,37 @@ class Score:
     def update(self, screen: pg.Surface):
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)
+        
+
+class EMP(pg.sprite.Sprite):
+    """
+    EMPで敵の動きを阻害するクラス
+    """
+    def __init__(self, emys, bombs):
+        super().__init__()
+
+        # 画面全体に黄色の半透明フィルタ（0.05秒）
+        self.image = pg.Surface((WIDTH, HEIGHT))
+        self.image.fill((255, 255, 0, 120))   # 半透明の黄色
+        self.rect = self.image.get_rect()
+        self.life = 3   # 50fps × 3 ≒ 0.06秒
+
+        # 敵機：爆弾投下不能 + ラプラシアン
+        for emy in emys:
+            emy.interval = math.inf
+            emy.image = pg.transform.laplacian(emy.image)
+
+        # 爆弾：速度低下 + 起爆せず消滅
+        for bomb in bombs:
+            bomb.speed = 2
+            bomb.emp_hit = True   # フラグを立てる
+
+    def update(self, screen):
+        self.life -= 1
+        screen.blit(self.image, self.rect)
+        if self.life < 0:
+            self.kill()
+
 
 
 def main():
@@ -253,6 +285,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
+    emps = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -263,6 +296,9 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if score.value >= 20 and event.type == pg.KEYDOWN and event.key == pg.K_e:
+                score.value -= 20
+                emps.add(EMP(emys, bombs))
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -299,6 +335,8 @@ def main():
         exps.update()
         exps.draw(screen)
         score.update(screen)
+        emps.update(screen)
+        emps.draw(screen)
         pg.display.update()
         tmr += 1
         clock.tick(50)
